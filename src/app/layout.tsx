@@ -17,13 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-TW" suppressHydrationWarning>
+    <html lang="zh-TW">
       <head />
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
           fontSans.variable
         )}
+        suppressHydrationWarning={true}
       >
         {children}
       </body>
