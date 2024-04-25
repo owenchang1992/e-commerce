@@ -5,7 +5,7 @@ import { z } from "zod";
 import fs from 'fs/promises';
 import { redirect } from "next/navigation";
 
-const MAX_FILE_SIZE = 500000;
+const MAX_FILE_SIZE = 5000000;
 const ACCEPTED_IMAGE_TYPES = [
   'image/jpeg',
   'image/jpg',
@@ -16,12 +16,13 @@ const ACCEPTED_IMAGE_TYPES = [
 // File instance only available on v20.0.0 or upper
 const fileSchema = z.instanceof(File, { message: "Required" })
 
+// TODO: Fix file size validation
 const imageSchema = fileSchema
   .refine((file) => file.size === 0 || file.type.startsWith('image/'))
-  .refine(
-    (file) => file.size >= MAX_FILE_SIZE,
-    `Max file size is ${MAX_FILE_SIZE / 100000}MB.`
-  ) // this should be greater than or equals (>=) not less that or equals (<=)
+  // .refine(
+  //   (file) => file.size >= MAX_FILE_SIZE,
+  //   `Max file size is ${MAX_FILE_SIZE / 100000}MB.`
+  // ) // this should be greater than or equals (>=) not less that or equals (<=)
   .refine(
     (file) => ACCEPTED_IMAGE_TYPES.includes(file.type),
     '.jpg, .jpeg, .png and .webp files are accepted.'

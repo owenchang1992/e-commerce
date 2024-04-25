@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import * as React from "react"
 import {
@@ -35,112 +35,92 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatCurrency } from "@/lib/formatter"
+import { Product } from "@prisma/client"
+import Link from "next/link"
+import _ from 'lodash'
 
-const data: Payment[] = [
-  {
-    id: "m5gr84i9",
-    amount: 316,
-    status: "success",
-    email: "ken99@yahoo.com",
-  },
-  {
-    id: "3u1reuv4",
-    amount: 242,
-    status: "success",
-    email: "Abe45@gmail.com",
-  },
-  {
-    id: "derv1ws0",
-    amount: 837,
-    status: "processing",
-    email: "Monserrat44@gmail.com",
-  },
-  {
-    id: "5kma53ae",
-    amount: 874,
-    status: "success",
-    email: "Silas22@gmail.com",
-  },
-  {
-    id: "bhqecj4p",
-    amount: 721,
-    status: "failed",
-    email: "carmella@hotmail.com",
-  },
-]
-
-export type Payment = {
-  id: string
-  amount: number
-  status: "pending" | "processing" | "success" | "failed"
-  email: string
+type ResultProduct = Partial<Product> & {
+  id: Product['id']
+  _count: {
+    orders: number
+  }
 }
 
-export const columns: ColumnDef<Payment>[] = [
+type FormattedProductColumn = Partial<Product> & {
+  id: Product['id']
+  orders: number
+}
+
+export const columns: ColumnDef<FormattedProductColumn>[] = [
   {
-    id: "select",
+    id: "isAvailableForPurchase",
     header: ({ table }) => (
       <Checkbox
         checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
+          table.getIsAllPageRowsSelected()
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
+        aria-label="Select all products"
       />
     ),
     cell: ({ row }) => (
       <Checkbox
-        checked={row.getIsSelected()}
+        checked={row.getValue("isAvailableForPurchase")}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
+        aria-label={`${row.getValue('name')} is ${row.getValue("isAvailableForPurchase") ? "available" : "unavailable"} for purchase`}
       />
     ),
     enableSorting: false,
     enableHiding: false,
   },
   {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => (
-      <div className="capitalize">{row.getValue("status")}</div>
-    ),
-  },
-  {
-    accessorKey: "email",
+    accessorKey: "name",
     header: ({ column }) => {
       return (
         <Button
+          className="px-0 hover:bg-inherit rounded-none"
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Email
+          Product Name
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       )
     },
-    cell: ({ row }) => <div className="lowercase">{row.getValue("email")}</div>,
+    cell: ({ row }) => (
+      <div className="capitalize">{row.getValue("name")}</div>
+    ),
   },
   {
-    accessorKey: "amount",
-    header: () => <div className="text-right">Amount</div>,
+    accessorKey: "description",
+    header: "Description",
+    cell: ({ row }) => <div className="lowercase">{row.getValue("description")}</div>,
+  },
+  {
+    accessorKey: "price",
+    header: () => <div className="text-left">Price</div>,
     cell: ({ row }) => {
-      const amount = parseFloat(row.getValue("amount"))
+      const price = parseFloat(row.getValue("price"))
 
       // Format the amount as a dollar amount
-      const formatted = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-      }).format(amount)
+      const formatted = formatCurrency(price)
 
-      return <div className="text-right font-medium">{formatted}</div>
+      return <div className="text-left font-medium">{formatted}</div>
+    },
+  },
+  {
+    accessorKey: "orders",
+    header: "Orders",
+    cell: ({ row }) => {
+      return <div className="lowercase">{row.getValue("orders")}</div>
     },
   },
   {
     id: "actions",
     enableHiding: false,
     cell: ({ row }) => {
-      const payment = row.original
+      const product = row.original
 
       return (
         <DropdownMenu>
@@ -153,13 +133,23 @@ export const columns: ColumnDef<Payment>[] = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(payment.id)}
+              onClick={() => navigator.clipboard.writeText(product.id)}
             >
-              Copy payment ID
+              Copy Product ID
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>View customer</DropdownMenuItem>
-            <DropdownMenuItem>View payment details</DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <a download href={`/admin/products/${product.id}/download`}>
+                Download
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/products/${product.id}/edit`}>
+                Edit
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem>View Details</DropdownMenuItem>
+            <DropdownMenuItem>View Orders</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -167,7 +157,7 @@ export const columns: ColumnDef<Payment>[] = [
   },
 ]
 
-export default function ProductsTable() {
+export default function ProductsTable({ data }: { data: ResultProduct[] }) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -176,8 +166,13 @@ export default function ProductsTable() {
     React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
 
+  const formattedData = data.map((product) => ({
+    ..._.omit(product, ['_count']),
+    ...product._count
+  }))
+
   const table = useReactTable({
-    data,
+    data: formattedData,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -199,10 +194,10 @@ export default function ProductsTable() {
     <div className="w-full">
       <div className="flex items-center py-4">
         <Input
-          placeholder="Filter emails..."
-          value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
+          placeholder="Filter product name..."
+          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
-            table.getColumn("email")?.setFilterValue(event.target.value)
+            table.getColumn("name")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />

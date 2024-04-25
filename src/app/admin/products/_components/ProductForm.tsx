@@ -4,10 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import React from 'react'
-import { z } from "zod";  
+import React from 'react' 
 import { addProduct } from '../../_actions/products';
 import { useFormState, useFormStatus } from 'react-dom';
+
+const SubmitButton = () => {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending} >{pending ? "Saving" : "Save"}</Button>
+  )
+}
 
 const ProductForm = () => {
   const [error, action] = useFormState(addProduct, {})
@@ -45,11 +52,3 @@ const ProductForm = () => {
 }
 
 export default ProductForm
-
-const SubmitButton = () => {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" disabled={pending} >{pending ? "Saving" : "Save"}</Button>
-  )
-}
