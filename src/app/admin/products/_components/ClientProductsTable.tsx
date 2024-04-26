@@ -1,6 +1,6 @@
 'use client'
 
-import * as React from "react"
+import { useMemo, useState, useTransition } from "react"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -13,10 +13,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, CheckCircle2, ChevronDown, MoreHorizontal, MoreVertical, XCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -39,37 +38,34 @@ import { formatCurrency } from "@/lib/formatter"
 import { Product } from "@prisma/client"
 import Link from "next/link"
 import _ from 'lodash'
+import { deleteProduct, updateProductAvailability } from "../../_actions/products"
+import { useRouter } from "next/navigation"
 
-type ResultProduct = Partial<Product> & {
-  id: Product['id']
+type SelectField = Pick<Product, "id" | "price" | "name" | "isAvailableForPurchase">
+type ResultProduct = SelectField & {
   _count: {
     orders: number
   }
 }
 
-type FormattedProductColumn = Partial<Product> & {
-  id: Product['id']
+type FormattedProductColumn = SelectField & {
   orders: number
 }
 
 export const columns: ColumnDef<FormattedProductColumn>[] = [
   {
-    id: "isAvailableForPurchase",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected()
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all products"
-      />
-    ),
+    accessorKey: "isAvailableForPurchase",
+    header: "",
     cell: ({ row }) => (
-      <Checkbox
-        checked={row.getValue("isAvailableForPurchase")}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label={`${row.getValue('name')} is ${row.getValue("isAvailableForPurchase") ? "available" : "unavailable"} for purchase`}
-      />
+      row.getValue("isAvailableForPurchase")
+        ? <>
+          <span className="sr-only">Available</span>
+          <CheckCircle2 />
+        </>
+        : <>
+          <span className="sr-only">Unavailable</span>
+          <XCircle className="stroke-destructive"/>
+        </>
     ),
     enableSorting: false,
     enableHiding: false,
@@ -119,25 +115,22 @@ export const columns: ColumnDef<FormattedProductColumn>[] = [
   {
     id: "actions",
     enableHiding: false,
+    size: 48,
+    minSize: 48,
+    maxSize: 48,
     cell: ({ row }) => {
       const product = row.original
 
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
+            <Button variant="ghost" className="h-8 w-8 p-0 rounded-full" size="icon">
               <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(product.id)}
-            >
-              Copy Product ID
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <a download href={`/admin/products/${product.id}/download`}>
                 Download
@@ -148,8 +141,10 @@ export const columns: ColumnDef<FormattedProductColumn>[] = [
                 Edit
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>View Details</DropdownMenuItem>
-            <DropdownMenuItem>View Orders</DropdownMenuItem>
+            <ActiveToggleDropdownItem id={product.id} isAvailableForPurchase={product.isAvailableForPurchase}/>
+            {/** It's unavailable to delete product if orders exist */}
+            <DropdownMenuSeparator />
+            <DeleteDropdownItem id={product.id} disabled={product.orders > 0}/>
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -157,19 +152,56 @@ export const columns: ColumnDef<FormattedProductColumn>[] = [
   },
 ]
 
-export default function ProductsTable({ data }: { data: ResultProduct[] }) {
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+export const ActiveToggleDropdownItem = ({ id, isAvailableForPurchase }: { id: string, isAvailableForPurchase: boolean }) => {
+  const [isPending, startTransition] = useTransition();
+  const route = useRouter()
+
+  return (
+    <DropdownMenuItem
+      disabled={isPending}
+      onClick={() => { startTransition( async () => {
+        await updateProductAvailability(id, !isAvailableForPurchase)
+        route.refresh()
+      })}}
+    >
+      {isAvailableForPurchase ? "Deactivate" : "Activate"}
+    </DropdownMenuItem>
+  )
+}
+
+export const DeleteDropdownItem = ({ id, disabled = false }: { id: string, disabled?: boolean }) => {
+  const [isPending, startTransition] = useTransition();
+  const route = useRouter()
+
+  return (
+    <DropdownMenuItem
+      variant="destructive"
+      disabled={isPending || disabled}
+      onClick={() => {
+        startTransition(async () => {
+          await deleteProduct(id)
+          route.refresh()
+        })
+      }}
+    >
+      Delete
+    </DropdownMenuItem>
+  )
+}
+
+export default function ProductsTable({ data }: { data: ResultProduct[] } ) {
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     []
   )
   const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState({})
+    useState<VisibilityState>({})
+  const [rowSelection, setRowSelection] = useState({})
 
-  const formattedData = data.map((product) => ({
+  const formattedData = useMemo(() => data.map((product) => ({
     ..._.omit(product, ['_count']),
     ...product._count
-  }))
+  })), [data])
 
   const table = useReactTable({
     data: formattedData,
@@ -192,19 +224,19 @@ export default function ProductsTable({ data }: { data: ResultProduct[] }) {
 
   return (
     <div className="w-full">
-      <div className="flex items-center py-4">
+      <div className="flex items-center justify-between py-4 space-x-4">
         <Input
           placeholder="Filter product name..."
           value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("name")?.setFilterValue(event.target.value)
           }
-          className="max-w-sm"
+          className="flex-1"
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
+            <Button variant="outline" className="ml-auto" size="icon">
+              <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

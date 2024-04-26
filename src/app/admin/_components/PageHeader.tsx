@@ -2,7 +2,9 @@ import React, { ReactNode } from 'react'
 
 const PageHeader = ({ children }: { children: ReactNode }) => {
   return (
-    <h1 className='text-4xl'>{children}</h1>
+    <div className='flex justify-between items-center gap-4 mb-2 lg:mb-4'>
+      {children}
+    </div>
   )
 }
 

@@ -29,17 +29,14 @@ const ProductsTable = async () => {
 const AdminProductsPage = () => {
   return (
     <>
-      <div className='flex justify-between items-center gap-4'>
-        <PageHeader>
-          Product
-        </PageHeader>
+      <PageHeader>
+        <h1 className='text-4xl'>Product</h1>
         <Button asChild variant="outline" className='rounded-full md:rounded-4' size="icon">
           <Link href="/admin/products/new">
-            <Plus className="md:mr-2" size="20" />
-            <p className='hidden md:block'>Add Product</p>
+            <Plus size="20" />
           </Link>
         </Button>
-      </div>
+      </PageHeader>
       <ProductsTable />
     </>
   )

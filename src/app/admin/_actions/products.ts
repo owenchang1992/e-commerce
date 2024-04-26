@@ -3,7 +3,7 @@
 import db from "@/db/db";
 import { z } from "zod";
 import fs from 'fs/promises';
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 const MAX_FILE_SIZE = 5000000;
 const ACCEPTED_IMAGE_TYPES = [
@@ -68,3 +68,25 @@ export const addProduct = async (prevState: unknown, formData: FormData) => {
 
   redirect('/admin/products')
 }
+
+export const updateProductAvailability = async (id: string, isAvailableForPurchase: boolean) => {
+  await db.product.update({
+    where: { id },
+    data: {
+      isAvailableForPurchase
+    },
+  });
+}
+
+// TODO: Shouldn't remove directly and need some restore mechanisms
+export const deleteProduct = async (
+  id: string,
+) => {
+  const product = await db.product.delete({
+    where: { id },
+  });
+  if (product === null) return notFound()
+
+  await fs.unlink(product.filePath)
+  await fs.unlink(`public${product.imagePath}`);
+};
